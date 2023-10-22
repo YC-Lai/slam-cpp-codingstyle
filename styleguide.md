@@ -96,3 +96,50 @@ TakeMyType({1, 2});
 
 當使用 `pair` 或者 `tuple` 時對於程式撰寫者有很大的方便性，然而對於閱讀者而言卻造成不便．光看 `.first`, `.second`, 或 `std::get<X>` 無法清楚的知道順序對應的含義，閱讀者必須移至宣告處才能明白．相反的，使用 `struct` 我們可以直接透過命名理解，更加增進閱讀效率．
 
+### Inheritance
+
+> dj/
+
+**Definition:**
+
+**Pros:**
+
+**Cons:**
+
+**Decision:**
+
+### Operator Overloading
+
+> dj/
+
+**Definition:**
+
+**Pros:**
+
+**Cons:**
+
+**Decision:**
+
+### Access Control
+
+> dj/
+
+**Definition:**
+
+**Pros:**
+
+**Cons:**
+
+**Decision:**
+
+### Declaration Order
+
+> dj/
+
+**Definition:**
+
+**Pros:**
+
+**Cons:**
+
+**Decision:**
