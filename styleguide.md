@@ -1,5 +1,7 @@
 # C++ Style Guide for SLAM
 
+## Header Files
+
 ## Classes
 
 類別是 C++ 中程式碼的基本單元。想當然爾, 在程式中類別將被廣泛使用。本節列舉了在撰寫一個類別時該做的和不該做的事項.
@@ -122,24 +124,21 @@ TakeMyType({1, 2});
 
 ### Access Control
 
-> dj/
-
-**Definition:**
-
-**Pros:**
-
-**Cons:**
-
-**Decision:**
+> 將所有數據成員宣告為 `private`, 除非他是 `constant`. 並根據需要提供相應的存取函式. 命名規則為, 某個名為 `foo_` 的變數, 其取值函式是 `foo()`. 賦值函式是 `set_foo()`. 一般在標頭檔中把存取函式定義成 inline function.
 
 ### Declaration Order
 
-> dj/
+類的訪問控制區段的宣告順序依次為: `public:`, `protected:`, `private:`. 如果某區段沒內容, 不宣告．
 
-**Definition:**
+每個區段內的宣告按以下順序:
 
-**Pros:**
+- Types and type aliases (typedef, using, enum, nested structs and classes, and friend types)
+- (Optionally, for structs only) non-static data members
+- Static constants
+- Factory functions
+- Constructors and assignment operators
+- Destructor
+- All other functions (static and non-static member functions, and friend functions)
+- All other data members (static and non-static)
 
-**Cons:**
-
-**Decision:**
+不要在類中定義大型 inline function. 通常, 只有那些沒有特別意義或性能要求高, 並且是比較短小的函式才能被定義為 inline function. 更多細節參考 內聯函式.
