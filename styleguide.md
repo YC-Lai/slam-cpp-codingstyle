@@ -2,11 +2,37 @@
 
 ## Header Files
 
+### 1. Self-contained Headers
+
+### 2. The #define Guard
+
+### 3. Include What You Use
+
+### 4. Forward Declarations
+
+### 5. Inline Functions
+
+### 6. Names and Order of Includes
+
+## Scoping
+
+### 7. Namespaces
+
+### 8. Internal Linkage
+
+### 9. Nonmember, Static Member, and Global Functions
+
+### 10. Local Variables
+
+### 11. Static and Global Variables
+
+### 12. Thread local Variables
+
 ## Classes
 
 類別是 C++ 中程式碼的基本單元。想當然爾, 在程式中類別將被廣泛使用。本節列舉了在撰寫一個類別時該做的和不該做的事項.
 
-### Doing Work in Constructors
+### 13. Doing Work in Constructors
 
 > 不要在建構子中呼叫虛函式 (virtual function)，也不要做任何有失敗可能的運算.
 
@@ -30,7 +56,7 @@
 
 建構子不得呼叫虛函式, 或嘗試報告一個非致命錯誤. 如果對象需要進行有意義的 (non-trivial) 初始化, 考慮使用明確的`Init()`方法或使用工廠模式.
 
-### Implicit Conversions
+### 14. Implicit Conversions
 
 > 對單個參數的建構子使用 C++ 關鍵字 ``explicit``.
 
@@ -62,7 +88,7 @@ MyType MakeMyType() { return {1, 2}; }
 TakeMyType({1, 2}); 
 ```
 
-### Copyable and Movable Types
+### 15. Copyable and Movable Types
 
 > dj/
 
@@ -74,7 +100,7 @@ TakeMyType({1, 2});
 
 **Decision:**
 
-### Structs vs. Classes
+### 16. Structs vs. Classes
 
 > 僅當只有數據時使用 `struct`, 其它一概使用 `class`.
 
@@ -90,7 +116,7 @@ TakeMyType({1, 2});
 
 注意: 類和結構體的成員變數使用不同的命名規則.
 
-### Structs vs. Pairs and Tuples
+### 17. Structs vs. Pairs and Tuples
 
 > 使用 `struct`，而非 `pair` 或者 `tuple`.
 
@@ -98,7 +124,7 @@ TakeMyType({1, 2});
 
 當使用 `pair` 或者 `tuple` 時對於程式撰寫者有很大的方便性，然而對於閱讀者而言卻造成不便．光看 `.first`, `.second`, 或 `std::get<X>` 無法清楚的知道順序對應的含義，閱讀者必須移至宣告處才能明白．相反的，使用 `struct` 我們可以直接透過命名理解，更加增進閱讀效率．
 
-### Inheritance
+### 18. Inheritance
 
 > dj/
 
@@ -110,7 +136,7 @@ TakeMyType({1, 2});
 
 **Decision:**
 
-### Operator Overloading
+### 19. Operator Overloading
 
 > dj/
 
@@ -122,11 +148,11 @@ TakeMyType({1, 2});
 
 **Decision:**
 
-### Access Control
+### 20. Access Control
 
 > 將所有數據成員宣告為 `private`, 除非他是 `constant`. 並根據需要提供相應的存取函式. 命名規則為, 某個名為 `foo_` 的變數, 其取值函式是 `foo()`. 賦值函式是 `set_foo()`. 一般在標頭檔中把存取函式定義成 inline function.
 
-### Declaration Order
+### 21. Declaration Order
 
 類的訪問控制區段的宣告順序依次為: `public:`, `protected:`, `private:`. 如果某區段沒內容, 不宣告．
 
@@ -142,3 +168,111 @@ TakeMyType({1, 2});
 - All other data members (static and non-static)
 
 不要在類中定義大型 inline function. 通常, 只有那些沒有特別意義或性能要求高, 並且是比較短小的函式才能被定義為 inline function. 更多細節參考 內聯函式.
+
+## Functions
+
+### 22. Inputs and Outputs
+
+### 23. Write Short Functions
+
+### 24. Functions Overloading
+
+### 25. Default Arguments
+
+### 26. Trailing Return Type Syntax
+
+## C++ Features
+
+### 27. Ownership and Smart Pointers
+
+### 28. Rvalue References
+
+### 29. Friends
+
+### 30. Exceptions
+
+### 31. noexcept
+
+### 32. Run-Time Type Information (RTTI)
+
+### 33. Casting
+
+### 34. Streams
+
+### 35. Preincrement and Predecrement
+
+### 36. Use of const
+
+### 37. Use of constexpr, constinit, and consteval
+
+### 38. Integer Types
+
+### 39. 64-bit Portability
+
+### 30. Preprocessor Macros
+
+### 31. 0 and nullptr/NULL
+
+### 32. sizeof
+
+### 33. Type Deduction (including auto)
+
+### 34. Class Template Argument Deduction
+
+### 35. Designated Initializers
+
+### 36. Lambda Expressions
+
+### 37. Template Metaprogramming
+
+### 38. Concepts and Constraints
+
+### 39. Boost
+
+### 40. Other C++ Features
+
+### 41. Nonstandard Extensions
+
+### 42. Aliases
+
+### 43. Switch Statements
+
+## Naming
+
+### 44. General Naming Rules
+
+### 45. File Names
+
+### 46. Type Names
+
+### 47. Variable Names
+
+### 48. Constant Names
+
+### 49. Function Names
+
+### 50. Namespace Names
+
+### 51. Enumerator Names
+
+### 52. Macro Names
+
+### 53. Exceptions to Naming Rules
+
+## Comments
+
+### 54. Comment Style
+
+### 55. File Comments
+
+### 56. Struct and Class Comments
+
+### 57. Function Comments
+
+### 58. Variable Comments
+
+### 59. Implementation Comments
+
+### 60. Punctuation, Spelling, and Grammar
+
+### 61. TODO Comments
