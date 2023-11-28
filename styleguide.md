@@ -166,15 +166,248 @@ ABSL_DECLARE_FLAG(flag_in_b);
 
 ### 7. Namespaces
 
+> **除了少數的例外，都建議使用把程式碼放在命名空間內。一個具名的命名空間應該擁有唯一的名字，其名稱可基於專案名稱，甚至是相對路徑。而在 .cc 文件內，使用匿名的命名空間是推薦的，但禁止使用 using 指示（using-directives）和內聯命名空間（inline namespaces）。**
+
+**Definition:**
+
+命名空間將全域作用域細分為獨立的，具名的作用域可有效防止全域作用域的命名衝突。
+
+**Pros:**
+
+命名空間可以在大型專案內避免名稱衝突，同時又可以讓多數的程式碼有合理簡短的名稱。
+
+舉例來說, 兩個不同專案的全域作用域都有一個類別 `Foo`，這樣在編譯或運行時期會造成衝突。如果每個專案將程式碼置於不同命名空間中，`project1::Foo` 和 `project2::Foo` 在專案中就可以被視為不同的 symbols 而不會發生衝突。兩個類別在各自的命名空間中，也可以繼續使用 `Foo` 而不需要前綴命名空間。
+
+內聯命名空間會自動把內部的標識符放到外層作用域，比如：
+
+```cpp
+namespace outer {
+inline namespace inner {
+  void foo();
+}  // namespace inner
+}  // namespace outer
+```
+
+`outer::inner::foo()` 與 `outer::foo()` 彼此可以互換使用。內聯命名空間主要用來保持跨版本的 ABI 相容性。
+
+**Cons:**
+
+命名空間可能造成疑惑，因為它增加了識別一個名稱所代表的意涵的難度。例如： `Foo` 是命名空間或是一個類別。
+
+內聯命名空間更是容易令人疑惑，因為它並不完全符合命名空間的定義；內聯命名空間只在大型版本控制裡會被使用到。
+
+在標頭檔中使用匿名命名空間容易導致違背 C++ 的唯一定義原則 (One Definition Rule (ODR))。
+
+在某些狀況中，經常會需要重複的使用完整 (fully-qualified) 的名稱來參考某些 symbols。對於多層巢狀的命名空間，這會增加許多混亂。
+
+**Decision:**
+
+使用命名空間如下：
+
+- 遵循 [Namespace 命名規則](#50-namespace-names)
+- f
+- Namespace 應包含整個 source file，並且排在來自其他 namespaces 的 includes 和前置宣告之後
+  
+    ```cpp
+    // In the .h file
+    namespace mynamespace {
+
+    // All declarations are within the namespace scope.
+    // Notice the lack of indentation.
+    class MyClass {
+    public:
+    ...
+    void Foo();
+    };
+
+    }  // namespace mynamespace
+    ```
+
+    ```cpp
+    // In the .cc file
+    namespace mynamespace {
+
+    // Definition of functions is within scope of the namespace.
+    void MyClass::Foo() {
+    ...
+    }
+
+    }  // namespace mynamespace
+    ```
+
+    更複雜的例子：
+
+    ```cpp
+    #include "a.h"
+
+    ABSL_FLAG(bool, someflag, false, "a flag");
+
+    namespace mynamespace {
+
+    using ::foo::Bar;
+
+    ...code for mynamespace...    // Code goes against the left margin.
+
+    }  // namespace mynamespace
+    ```
+
+- 禁止在 `std` 命名空間中定義東西
+- 禁止使用 using-directives，這會污染命名空間。
+
+    ```cpp
+    // Forbidden -- This pollutes the namespace.
+    using namespace foo;
+    ```
+
+- 禁止使用內聯命名空間
+- 禁止在 `.h` 中使用命名空間別名 (Namespace aliases)，但在 `.cc` 中允許。因為若在 `.h` 將會成為 API 的一部份洩露給所有人。
+  
+    ```cpp
+    // Shorten access to some commonly used names in .cc files.
+    namespace baz = ::foo::bar::baz;
+    ```
+
 ### 8. Internal Linkage
+
+> **當`.cc`檔案中的定義不需要在該檔案之外引用時，將它們放置在匿名命名空間來賦予它們內部連結 (Internal Linkage)。 禁止在`.h`檔案中使用。**
+
+**Definition:**
+
+所有宣告可以放置在匿名命名空間來賦予他內部連結。同樣的，我們也可透過為 function 與 variables 加上 `static` 來賦予其性質。一旦賦予內部連結性質，所有該檔案以外的地方均無法參考。
+
+**Decision:**
+
+建議將任何不需給外部參考的東西放置在匿名空間中，這裡不推薦使用 `static` 的原因在於 `static` 在不同地方往往含意不同，這種寫法易造成混淆。禁止在`.h`檔案中使用內部連結。
+
+```cpp
+namespace {
+int i = 20;
+}
+
+int main(int, char**) {
+  std::cout << "i: " << ::i << std::endl;
+}
+```
 
 ### 9. Nonmember, Static Member, and Global Functions
 
+> **建議將非成員函式放置在命名空間中，盡量不要使用完全的全域函式。建議利用命名空間來放置相關的多個函式，而不是全部放置在類別中並宣告成 `static`。類別的靜態方法一般來說要和類別的實例或類別的靜態資料有緊密的關連。**
+
+**Pros:**
+
+某些情況下，非成員函式和靜態成員函式是非常有用的。將非成員函式放在命名空間內可避免對於全域作用域污染。
+
+**Cons:**
+
+為非成員函式和靜態成員函式準備一個新的類別可能更有意義，特別是它們需要存取外部資源或式有大量的相依性關係時。
+
+**Decision:**
+
+有時候定義一個不綁定特定類別實例的函式是有用的，甚至是必要的。這樣的函式可以被定義成靜態成員或是非成員函式。非成員函式不應該依賴於外部變數，且應該總是放置於某個命名空間內。相比單純為了封裝不共享任何靜態數據的靜態成員函式而創建一個類別，不如之直接使用 [Namespaces](#7-namespaces)。例如對於 myproject/foo_bar.h 標頭擋來說，可以這樣寫。
+
+```cpp
+namespace myproject {
+namespace foo_bar {
+void Function1();
+void Function2();
+}
+}
+```
+
+而不是
+
+```cpp
+// Forbidden
+namespace myproject {
+class FooBar {
+ public:
+  static void Function1();
+  static void Function2();
+};
+}
+```
+
+如果你必須定義非成員函式，又只是在 `.cc` 文件中使用它，則可使用 [Internal Linkage](#8-internal-linkage) 限定其作用域。
+
 ### 10. Local Variables
+
+> **盡可能將函式內的變數的作用域最小化，並在變量宣告時進行初始化。**
+
+C++ 允許在函式內的任何位置宣告變數。我們鼓勵在盡可能小的作用域中宣告變量，並且離第一次使用的地方越近越好。這會讓閱讀者更容易找到變數宣告的位置、宣告的類型和初始值。要注意，應該該宣告時直接初始化變數，而不要先代宣告再後賦值, 例如：
+
+```cpp
+int i;
+i = f();      // Bad -- initialization separate from declaration.
+```
+
+```cpp
+int i = f();  // Good -- declaration has initialization.
+```
+
+```cpp
+int jobs = NumJobs();
+// More code...
+f(jobs);      // Bad -- declaration separate from use.
+```
+
+```cpp
+int jobs = NumJobs();
+f(jobs);      // Good -- declaration immediately (or closely) followed by use.
+```
+
+```cpp
+std::vector<int> v = {1, 2};  // Good -- v starts initialized.
+```
+
+在 `if`、`while`和`for`陳述句需要的變數一般都會宣告在這些陳述句中，也就是這些變數會存活於這些作用域內。例如：
+
+```cpp
+while (const char* p = strchr(str, '/')) str = p + 1;
+```
+
+如果變數是一個物件，每次進入作用域時其建構子都會被呼叫，每次離開作用域時其解構子都會被呼叫。
+
+```cpp
+// Inefficient implementation:
+for (int i = 0; i < 1000000; ++i) {
+  Foo f;  // My ctor and dtor get called 1000000 times each.
+  f.DoSomething(i);
+}
+```
+
+在循環作用域外面宣告這類型的變數可能更加的有效率。
+
+```cpp
+Foo f;  // My ctor and dtor get called once each.
+for (int i = 0; i < 1000000; ++i) {
+  f.DoSomething(i);
+}
+```
 
 ### 11. Static and Global Variables
 
-### 12. Thread local Variables
+> 
+
+**Definition:**
+
+每個物體都有一個儲存時間，這與其壽命相關。 具有靜態儲存持續時間的物件從初始化開始一直持續到程式結束。 此類物件在命名空間範圍內（“全域性變數”）作為變數出現，作為類的靜態資料成員，或作為使用靜態說明符宣告的函式-區域性變數出現。 當控制首次透過其宣告時，函式本地靜態變數將被初始化；所有其他具有靜態儲存持續時間的物件都會作為程式啟動的一部分初始化。 所有具有靜態儲存持續時間的物件都會在程式退出時被銷燬（這發生在未連線的執行緒終止之前）。
+
+初始化可能是動態的，這意味著初始化期間會發生一些不平凡的事情。 （例如，考慮分配記憶體的建構函式，或使用當前程序ID初始化的變數。） 另一種初始化是靜態初始化。 不過，兩者並不完全相反：靜態初始化總是發生在具有靜態儲存持續時間的物件身上（將物件初始化為給定常量或由設定為零的所有位元組組成的表示），而如果需要，動態初始化會發生在那之後。
+
+**Pros:**
+
+
+**Cons:**
+
+**Decision:**
+
+- **Decision on destruction**
+    
+    
+- **Decision on initialization**
+- **Common patterns**
+
+### 12. `thread_local` Variables
 
 ---
 
