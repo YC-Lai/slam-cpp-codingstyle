@@ -386,28 +386,162 @@ for (int i = 0; i < 1000000; ++i) {
 
 ### 11. Static and Global Variables
 
-> 
+> **除非物件是 trivially destructible，不然禁止使用具有 static storage duration 的物件。Static function-local variables 可以使用動態初始化 (dynamic initialization)。 不鼓勵對 namespace 內的變數或者 static class member variables 或進行動態初始化。**
+> **作為經驗法則：一個宣告為 `constexpr` 的變數、[POD (Plain Old Data)](https://zh.wikipedia.org/zh-tw/POD_(程序设计)) 如 `int` `char` `float` `raw pointer`、POD array/struct/class ，可以滿足上述要求。**
+
+- [trivially destructible](https://cplusplus.com/reference/type_traits/is_trivially_destructible/): 基本上指 POD。
+- [static storage duration](https://en.cppreference.com/w/c/language/static_storage_duration): 物件的生命週期(lifetime)是從程式開始執行的時候開始，程式結束之後才會被釋放。
+- [dynamic initialization](https://stackoverflow.com/questions/5945897/what-is-dynamic-initialization-of-object-in-c): 初始值無法在 compile-time 得知，會在 runtime 時計算。
 
 **Definition:**
 
-每個物體都有一個儲存時間，這與其壽命相關。 具有靜態儲存持續時間的物件從初始化開始一直持續到程式結束。 此類物件在命名空間範圍內（“全域性變數”）作為變數出現，作為類的靜態資料成員，或作為使用靜態說明符宣告的函式-區域性變數出現。 當控制首次透過其宣告時，函式本地靜態變數將被初始化；所有其他具有靜態儲存持續時間的物件都會作為程式啟動的一部分初始化。 所有具有靜態儲存持續時間的物件都會在程式退出時被銷燬（這發生在未連線的執行緒終止之前）。
+每個物體都有一個 storage duration，這與其生命週期相關。 具有 static storage duration 的物件從初始化開始一直持續到程式結束。 此類物件在命名空間範圍內（“全域性變數”）作為變數出現，或作為 static data members of classes，或作為 static function-local variables 出現。Static function-local variables 會在首次呼叫該函式時初始化；而其他類型皆在程式啟動時初始化。 所有具有static storage duration 的物件都會在程式退出時被銷毀（注意：發生在 unjoined threads 被終止之前）。
 
-初始化可能是動態的，這意味著初始化期間會發生一些不平凡的事情。 （例如，考慮分配記憶體的建構函式，或使用當前程序ID初始化的變數。） 另一種初始化是靜態初始化。 不過，兩者並不完全相反：靜態初始化總是發生在具有靜態儲存持續時間的物件身上（將物件初始化為給定常量或由設定為零的所有位元組組成的表示），而如果需要，動態初始化會發生在那之後。
+Dynamic initialization，代表在初始化期間會執行 non-trivial 運算（例如，allocates memory, 變數由 current PID 初始化），也因此無法在 complie-time 得知，反之則是 Static initialization。 Static initialization 總是發生在具有 static storage duration 的物件身上，動態初始化會發生在 runtime。
 
 **Pros:**
 
+Global and static variables 對多數應用程式非常有用：named constants, auxiliary data structures internal to some translation unit, command-line flags, logging, registration mechanisms, background infrastructure, etc.。
 
 **Cons:**
+
+使用 dynamic initialization 或具有 non-trivial destructors 的全域性和靜態變數很容易導致難以找到的錯誤。 原因在於，大型專案很難控制個單元的連結順序，建構子、解構子和初始化的順序在 C++ 中規範並不完整，導致每次編譯會產生不同的結果。 當一個靜態變數初始化時使用另一個變數，這可能會導致物件在其生命週期開始前（或其生命週期結束後）被訪問。 此外，當程式啟動 unjoined threads 並且未在結束前 join，這些執行緒可能會在其生命週期結束後嘗試訪問物件。
 
 **Decision:**
 
 - **Decision on destruction**
-    
-    
+  
+  當 destructors 為 trivial，它們的執行完全不受順序約束（它們實際上不會“執行”）；否則，我們將面臨在物件生命週期結束後訪問物件的風險。 因此，我們只允許具有 static storage duration 的物件，前提是它們是 trivially destructible。 如 POD， 標有 `constexpr` 的變數。
+
+  ```cpp
+  const int kNum = 10;  // Allowed
+
+  struct X { int n; };
+  const X kX[] = {{1}, {2}, {3}};  // Allowed
+
+  void foo() {
+    static const char* const kMessages[] = {"hello", "world"};  // Allowed
+  }
+
+  // Allowed: constexpr guarantees trivial destructor.
+  constexpr std::array<int, 3> kArray = {1, 2, 3};
+  ```
+
+  ```cpp
+  // bad: non-trivial destructor
+  const std::string kFoo = "foo";
+
+  // Bad for the same reason, even though kBar is a reference (the
+  // rule also applies to lifetime-extended temporary objects).
+  const std::string& kBar = StrCat("a", "b", "c");
+
+  void bar() {
+    // Bad: non-trivial destructor.
+    static std::map<int, int> kData = {{1, 0}, {2, 0}, {3, 0}};
+  }
+  ```
+
+  請注意，references 不是物件，雖然因此不受 destructibility 的限制，但還是受 dynamic initialization 影響。唯一的例外為：`static T& t = *new T`，這種寫法可被允許。
+
 - **Decision on initialization**
+  
+  初始化更為複雜，端看 constructors 的設計，考慮以下全域變數的寫法：
+
+  ```cpp
+  int n = 5;    // Fine
+  int m = f();  // ? (Depends on f)
+  Foo x;        // ? (Depends on Foo::Foo)
+  Bar y = g();  // ? (Depends on g and on Bar::Bar)
+  ```
+
+  若使用 constant initialization，則可被允許：
+
+  ```cpp
+  struct Foo { constexpr Foo(int) {} };
+
+  int n = 5;  // Fine, 5 is a constant expression.
+  Foo x(2);   // Fine, 2 is a constant expression and the chosen constructor is constexpr.
+  Foo a[] = { Foo(1), Foo(2), Foo(3) };  // Fine
+  ```
+
+  任何沒有如此標記的 non-local static storage duration variable 都應推定為具有動態初始化，並非常仔細地審查。
+  相反的，以下不被允許：
+
+  ```cpp
+  // Some declarations used below.
+  time_t time(time_t*);      // Not constexpr!
+  int f();                   // Not constexpr!
+  struct Bar { Bar() {} };
+
+  // Problematic initializations.
+  time_t m = time(nullptr);  // Initializing expression not a constant expression.
+  Foo y(f());                // Ditto
+  Bar b;                     // Chosen constructor Bar::Bar() not constexpr.
+  ```
+
 - **Common patterns**
+  以下將討論各種需要設為全域或靜態變數的情境：
+  - **Global `string`**: 若要使用，考慮宣告成 `constexpr` 的 `string_view` （string_view 具有 constexpr constructor 和 trivial destructor），`char[]`，`char*`。
+  - **Maps, sets, and other dynamic containers**：任何 dynamic contianers 都不具有 trivial destructor，因此不被允許使用。請考慮用 array of array 或者 array of pair 來取代 （當然，array 裡面也要是 POD）。宣告時可考慮將值排序，以便進行搜尋時使用 binary search 增加效率。
+  - **Smart pointers**：smart pointers 不具有 trivial destructor 因此不被允許。若要使用 pointer，直接宣告一個 `raw pointer` 即可。
+  - **Static variables of custom types**：若要使用，則需定義對應的 `constexpr` constructor，並且需具有 trivial destructor。
+  - 若上述方式都無法滿足需求，還有一種特殊方式可以動態宣告，考慮使用 function-local static pointer / reference:
+  
+    ```cpp
+    T& GetT() {
+      static const auto& impl = *new T(args...);
+      retrun impl;
+    }
+    ```
 
 ### 12. `thread_local` Variables
+
+> **所有未在 function 內宣告的 `thread_local` 變數，必須宣告為 `constexpr` 。任何 thread-local data 請偏好使用 `thread_local`。**
+
+**Definition:**
+
+變數可以宣告為 `thread_local`:
+
+```cpp
+thread_local Foo foo = ...;
+```
+
+這種變數實際上是物件的集合，因此當不同的執行緒訪問它時，它們實際上是在訪問不同的物件。`thread_local` 可看作為單一 thread 範疇內的  [static storage duration variables](#11-static-and-global-variables)，例如：他可以宣告在 namespace，可以在 function 內，或者為 static class members，但不可作為一般的 class members。
+
+`thread_local` 變數初始化與靜態變數非常相似，只是它們必須為每個執行緒單獨初始化，而不是在程式啟動時初始化一次。 這意味著函式中宣告的 `thread_local` 變數是安全的，但在其他地方宣告的 `thread_local` 變數會受到與靜態變數相同的初始化順序問題（以及更多）。
+
+`thread_local` 變數有一個微妙的銷毀順序問題：在執行緒關閉期間， `thread_local` 變數將按照其初始化的相反順序被銷毀。 如果由任何 `thread_local` 變數的 destructor 中訪問任何已被破壞的 `thread_local`，將產生難以發現的 use-after-free bug。
+
+**Pros:**
+
+- Thread-local data 能有效避免 data racing 問題，適合用於 concurrent programming.
+- `thread_local` 是唯一一個 c++ 標準支持創建 thread-local data 的方式。
+
+**Cons:**
+
+- 每當新的 thread 開始，`thread_local`變數的 constructor 也無可避免的需要被重新運算。
+- `thread_local` 變數是一種全域變數，因此也同樣有全域變數的所有缺點（但他會是 thread-safety）。
+- 隨著 thread 數量上升，`thread_local` 變數所佔用的記憶體也隨之上升。
+- 一般的 data member 不能為 `thread_local` 除非他是 `static`。
+- 有可能發生 use-after-free bug，如上所述。
+
+**Decision:**
+
+當想要在 namespace 或者 class scope 中宣告 `thread_local` 變數，請使其為一個 `constexpr`，或者使用 function-local 技巧：
+
+```cpp
+constexpr thread_local Foo foo = ...;
+
+// or
+Foo& MyThreadLocalFoo() {
+  thread_local Foo result = ComplicatedInitialization();
+  return result;
+}
+```
+
+在函式內宣告的 `thread_local` 變數則沒有初始化問題，但也會有潛在的 use-after-free bug 風險。實務上，請考慮使用 trival data types，或者在 destructor 中避免使用自定義的 class，以免訪問到其他的 `thread_local` 變數。
+
+當有使用 thread-local data 的需求，請使用 `thread_local` 取代自定義的機制。
 
 ---
 
@@ -417,7 +551,7 @@ for (int i = 0; i < 1000000; ++i) {
 
 ### 13. Doing Work in Constructors
 
-> 不要在建構子中呼叫虛函式 (virtual function)，也不要做任何有失敗可能的運算.
+> **不要在建構子中呼叫虛函式 (virtual function)，也不要做任何有失敗可能的運算.**
 
 **Definition:**
 
@@ -433,49 +567,94 @@ for (int i = 0; i < 1000000; ++i) {
 - 如果在建構子內呼叫了自身的虛函式, 這類呼叫是不會重定向 (dispatched) 到子類的虛函式實作. 即使當前沒有子類化實作, 將來仍是隱患.
 - 建構子中難以報錯, 或使用例外.
 - 建構失敗會造成對象進入不確定狀態．或許可使用類似 `IsValid()` 的機制去做狀態檢查，但這不具強制性也很容忘記使用．
-- 如果有人創建該類型的全域變數 (雖然違背了上節提到的規則), 建構子將先 ``main()`` 一步被呼叫, 有可能破壞建構函式中暗含的假設條件. 例如, `gflags <http://code.google.com/p/google-gflags/>`_ 尚未初始化.
+- 建構子無法獲得地址，意味著無法移交至 thread 中運算。
 
 **Decision:**
 
-建構子不得呼叫虛函式, 或嘗試報告一個非致命錯誤. 如果對象需要進行有意義的 (non-trivial) 初始化, 考慮使用明確的`Init()`方法或使用工廠模式.
+建構子不得呼叫虛函式。 若物件初始化過於複雜，有潛在失敗的風險, 考慮使用明確的`Init()`方法以便進行錯誤處理，或更進一步使用工廠模式包裝，防止物件未正確初始化：
+
+```cpp
+// foo.h
+class Foo {
+ public:
+  // Factory method: creates and returns a Foo.
+  // May return null on failure.
+  static std::unique_ptr<Foo> Create();
+
+  // Foo is not copyable.
+  Foo(const Foo&) = delete;
+  Foo& operator=(const Foo&) = delete;
+
+ private:
+  // Clients can't invoke the constructor directly.
+  Foo();
+  void Init();
+};
+
+// foo.c
+std::unique_ptr<Foo> Foo::Create() {
+  // Note that since Foo's constructor is private, we have to use new.
+  auto inst = std::make_unique<Foo>();
+  inst.Init(); // Ensure proper initialization
+  return std::move(inst);
+}
+```
 
 ### 14. Implicit Conversions
 
-> 對單個參數的建構子使用 C++ 關鍵字 ``explicit``.
+> **不要定義隱式轉換（Implicit conversion）。對單個參數的建構子與 conversion operator (e.g., `operator bool()`) 使用 C++ 關鍵字 `explicit`。**
 
 **Definition:**
 
-通常, 如果建構子只有一個參數, 可看成是一種隱式轉換. 打個比方, 如果你定義了 ``Foo::Foo(string name)``, 接著把一個字符串傳給一個以 ``Foo`` 對象為參數的函式, 建構函式 ``Foo::Foo(string name)`` 將被呼叫, 並將該字符串轉換為一個 ``Foo`` 的臨時對像傳給呼叫函式. 看上去很方便, 但如果你並不希望如此通過轉換生成一個新對象的話, 麻煩也隨之而來. 為避免構造函式被呼叫造成隱式轉換, 可以將其宣告為 ``explicit``.
+隱式轉換允許將 source type 轉換為 destination type，如將 `int` 傳入接受 `double` 參數的函式。
 
-除單參數建構子外, 這一規則也適用於除第一個參數以外的其他參數都具有默認參數的建構函式, 例如 Foo::Foo(string name, int id = 42).
+除此之外，透過 conversion operator，C++ 允許自定義的隱式轉換。而當自定義的 constructor 為單參數的建構子時（或者只有一個參數沒有預設值，e.g., `Foo::Foo(string name, int id = 42)`），隱式轉換也會發生。
+
+`explicit` 可使用在建構子與 conversion operator ，確保了 destination type 必須與 source type 一致。此效用不但防止隱式轉換，同時也作用於 list initialization。如下例：
+
+```cpp
+class Foo {
+  explicit Foo(int x, double y);
+  ...
+};
+
+void Func(Foo f);
+```
+
+```cpp
+Func({42, 3.14});  // Error
+```
 
 **Pros:**
 
-無
+- 隱式轉換可以增加便利性，不必做明確的轉型（type casting）。
+- 隱式轉換可以成為 overloading 的簡單替代方案，例如當帶有 `string_view` 引數的函式也可接收 `std::string` 和 `const char*` ，不必再定義重載。
+- 列表初始化（list initialization）語法是初始化物件的一種簡潔方式。
 
 **Cons:**
 
-無
+- 隱式轉換會造成隱藏型別不匹配錯誤，或者使用者不知道將發生何種轉換。
+- 隱式轉換可以使程式更難閱讀，特別是在 overloading 的情況下，因為無法判定何種函式被呼叫。
+- 單參數的建構函式可能會意外地用作隱式型別轉換，即使不打算這樣做。
+- 當單參數構造函式沒有標記為 `explicit` 時，沒有可靠的方法來判斷它是否旨在定義隱式轉換，還是作者只是忘記標記它。
+- 隱式轉換可能會導致呼叫模糊性，特別是當有雙向隱式轉換時。 這發生於由兩種提供隱式轉換的型別引起的，也可以是由同時具有隱式建構子和 conversion operator 的型別造成的。
+- 如果目標型別是隱式的，特別是如果列表只有一個元素，列表初始化可能會遇到同樣的問題。
 
 **Decision:**
 
-所有單參數建構子都必須是顯式的. 在類定義中, 將關鍵字 ``explicit`` 加到單參數建構函式前: ``explicit Foo(string name);``
+所有單參數建構子與 conversion operator 都必須是顯式的。但 copy ＆ move constructors 不能為顯式, 因為他們不涉及型別轉換.
 
-例外: 在極少數情況下, 拷貝建構子可以不宣告成 ``explicit``. 作為其它類的透明包裝器的類也是特例之一. 類似的例外情況應在註解中明確說明.
+例外: 當物件可用不同型別表示，其背後的值相同時，可與你的 leader 討論是否可忽略此規則。
 
-最後, 只有 std::initializer_list 的建構子可以是非 explicit, 以允許你的類型結構可以使用列表初始化的方式進行賦值. 例如:
-
-```cpp
-MyType m = {1, 2};
-MyType MakeMyType() { return {1, 2}; }
-TakeMyType({1, 2}); 
-```
+最後, 只有 `std::initializer_list` 的建構子可以是非 `explicit`, 以允許你的類型結構可以使用列表初始化的方式進行賦值. 例如: `MyType m = {1, 2};`。
 
 ### 15. Copyable and Movable Types
 
-> dj/
+> **Class 的 public API 必須明確宣告該類是 copyable, move-only, 或者都不是。 如果這些操作對您的型別來說清楚且有意義，請支援 copy 和/或 move。**
 
 **Definition:**
+
+
 
 **Pros:**
 
@@ -485,19 +664,19 @@ TakeMyType({1, 2});
 
 ### 16. Structs vs. Classes
 
-> 僅當只有數據時使用 `struct`, 其它一概使用 `class`.
+> 僅當只有數據時使用 `struct`，其它一概使用 `class`。
 
 **Decision:**
 
 在 C++ 中 `struct` 和 `class` 關鍵字幾乎含義一樣. 我們為這兩個關鍵字添加我們自己的語義理解, 以便在定義數據類型時選擇合適的關鍵字.
 
-`struct` 用來定義包含僅包含數據的對象, 也可以包含相關的常數, 但除了存取數據成員之外, 沒有別的函式功能. 所有數據皆為 `public`，並且僅允許建構子, 解構子, Operator, 與相關的 helper function. 所有變數與函式應避免引入不變性 (invariants).
+`struct` 用來定義包含僅包含數據的對象, 也可以包含相關的常數, 但除了 getter/setter 之外, 沒有別的函式功能。 所有數據皆為 `public`，並且僅允許建構子, 解構子, Operator, 與相關的 helper function。 所有變數與函式應避免引入不變性 (invariants)。
 
-如果需要更多的函式功能, `class` 更適合. 如果拿不準, 就用 `class`.
+如果需要更多的函式功能，`class` 更適合。如果拿不準，就用 `class`。
 
 為了和 STL 保持一致, 對於 stateless types 的特性可以不用 `class` 而是使用 `struct`，像是 [traits](https://stephlin.github.io/post/cpp/cpp-traits/), [template metafunctions]((https://google.github.io/styleguide/cppguide.html#Template_metaprogramming)), etc.
 
-注意: 類和結構體的成員變數使用不同的命名規則.
+注意: `class` 和 `struct` 的成員變數使用不同的命名規則.
 
 ### 17. Structs vs. Pairs and Tuples
 
@@ -509,7 +688,7 @@ TakeMyType({1, 2});
 
 ### 18. Inheritance
 
-> dj/
+> **多用組合，少用繼承。 使用繼承時，定義為 `public`。**
 
 **Definition:**
 
@@ -533,11 +712,13 @@ TakeMyType({1, 2});
 
 ### 20. Access Control
 
-> 將所有數據成員宣告為 `private`, 除非他是 `constant`. 並根據需要提供相應的存取函式. 命名規則為, 某個名為 `foo_` 的變數, 其取值函式是 `foo()`. 賦值函式是 `set_foo()`. 一般在標頭檔中把存取函式定義成 inline function.
+> **將所有數據成員宣告為 `private`，除非他是 `const`。 並根據需求提供相應的存取函式。**
+
+將變數設為 private 可以有效地防止非預期的修改。命名規則為，某個名為 `foo_` 的變數，其取值函式是 `foo()`。賦值函式是 `set_foo()`。一般在標頭檔中把存取函式定義成 inline function。
 
 ### 21. Declaration Order
 
-類的訪問控制區段的宣告順序依次為: `public:`, `protected:`, `private:`. 如果某區段沒內容, 不宣告．
+> **類的訪問控制區段的宣告順序依次為: `public:`，`protected:`，`private:`。如果某區段沒內容，不宣告。**
 
 每個區段內的宣告按以下順序:
 
@@ -550,7 +731,7 @@ TakeMyType({1, 2});
 - All other functions (static and non-static member functions, and friend functions)
 - All other data members (static and non-static)
 
-不要在類中定義大型 inline function. 通常, 只有那些沒有特別意義或性能要求高, 並且是比較短小的函式才能被定義為 inline function. 更多細節參考 內聯函式.
+不要在類中定義大型 inline function。通常，只有那些沒有特別意義或性能要求高, 並且是比較短小的函式才能被定義為 [inline function](#5-inline-functions)。
 
 ---
 
@@ -558,13 +739,167 @@ TakeMyType({1, 2});
 
 ### 22. Inputs and Outputs
 
+C++函式的輸出是透過 `return` 提供的，有ㄅ時也可透過 output parameters（or in/out parameters）。
+
+盡可能的使用 `return` 而非 output parameters：它們提高了可讀性，並且通常提供相同或更好的效能 (現在編譯器都有 RVO 優化，更多請參考 [copy elision](https://en.cppreference.com/w/cpp/language/copy_elision) 的解釋，或者此篇文章：[Revisiting output parameters usefulness (in C++)](https://bulldogjob.pl/readme/revisiting-output-parameters-usefulness-in-c))。
+
+請使用 return by value 或者 return by reference。 禁止使用 return by pointer（smart pointer 可被允許，並且可為 `nullptr`）。
+
+Parameters 要麼是 input parameters，要麼是 output parameters，要麼兩者兼具：
+
+- **Input paramters**: 請 pass by const reference/value，禁止使用 optional input，除非他用於 debug（請參考：[Avoid Passing Booleans to Functions](https://alexkondov.com/should-you-pass-boolean-to-functions/)）。若使用 optional input，請盡可能的使用 `std::optional` 以增加可讀性。
+- **Output parameters & Input/Output parameters**: 若有需要使用此，請 pass by reference。禁止使用 optional output，除非他用於 debug。若使用 optional output，請盡可能的使用 `std::optional` 以增加可讀性。
+
+在使用 pass by const reference 時，避免定義 const reference parameter 比 function call 生命週期長的函式，因為 const reference parameter 可以連結到 `rvalue`，看下面例子:
+
+```cpp
+class StringHolder {
+public:
+  // The input `val` must live as long as this object,
+  // not just the call to this constructor
+  StringHolder(const string& val) : val_(val) {}
+
+  const string& get() { return val_; }
+private:
+  const string& val_;
+}
+
+//----
+
+StringHolder holder("abc"s); // temporaries bind to const-ref 
+std::cout << holder.get();  // boom, UB. 
+// The string temporary has already been destroyed, the reference is dangling.
+
+```
+
+相反，找到一種方法來消除生命週期需求（例如，透過 pass by value）。
+
+排序函式 parameters 時，將所有 input parameters 排在 output parameters 之前。 
+
 ### 23. Write Short Functions
+
+> **盡可能寫小而集中的功能，並且遵循：一個函式只做一件事。**
+
+如果一個函式超過大約40行，請考慮是否可以在不損害程式結構的情況下將其分解。
+
+即使您的大函式現在工作正常，在幾個月內修改它的人可能會新增新行為。 這可能會導致難以找到的錯誤。 保持函式的簡短和只做一件事的原則，使其他人更容易閱讀和修改您的程式。**小函式也更容易測試**。
 
 ### 24. Functions Overloading
 
+> **當變體之間沒有語義差異時，您可以重載函式。避免讓使用者呼叫時難以猜測實際上被呼叫的函式。**
+
+**Definition:**
+
+您可以編寫一個接受 `const std::string&` 的函式，並用另一個接受 `const char*` 的函式重載它。 (然而，在這種情況下，請考慮 `std::string_view`。)
+
+```cpp
+class MyClass {
+ public:
+  void Analyze(const std::string &text);
+  void Analyze(const char *text, size_t textlen);
+};
+```
+
+**Pros:**
+
+透過允許同名函式接受不同的引數，overloading 可以使程式更直觀。 它可能需要模板化程式，並且對使用者來說很方便。
+
+基於const或ref資格的超載可能會使實用程式更可用、更高效，或兩者兼而有之。 （有關更多資訊，請參閱TotW 148。）
+
+**Cons:**
+
+如果函式 overloading 僅針對 parameter type 變化，讀者可能必須瞭解C++的複雜匹配規則才能知道發生了什麼。 如果 derived class 只覆蓋函式的一些 variants，許多人也會對繼承的語義感到困惑。
+
+**Decision:**
+
+當變體之間沒有語義差異時，您可以重載函式，否則考慮定義新的函式。 這些重載可能因型別、qualifiers 或 parameters 數量而異。如果您可以在 header 中用簡單的 comment 記錄 overload set 中的所有變體，這是一個好跡象，表明它是一個設計良好的 overload set。
+
+
 ### 25. Default Arguments
 
+> **預設值只被允許用於 non-virtual function，因為這保證始終具有相同的值。 遵循與 Function overloading 相同的限制，如果預設引數獲得的可讀性沒有比以下缺點更有價值，則考慮重載函式。**
+
+**Pros:**
+
+通常，您有一個使用預設值的函式，但偶爾您想覆蓋預設值。 預設引數允許一種簡單的方法來做到這一點，而無需為罕見的異常定義許多函式。 與重載函式相比，預設引數具有更清晰的語法，樣板更少，並且“必需”和“可選”引數之間的區別更清晰。
+
+**Cons:**
+
+預設引數是實現 function overloading 的另一種方式，因此所有 [function overloading 的缺點](#24-functions-overloading) 都適用。
+
+Virtual function 呼叫中 parameter 的預設值由目標物件的靜態型別決定，不能保證給定函式的所有 override 都宣告相同的預設值，例如：
+
+```cpp
+struct A {
+    virtual void display(int i = 5) { std::cout << "Base::" << i << "\n"; }
+};
+struct B : public A {
+    virtual void display(int i = 9) override { std::cout << "Derived::" << i << "\n"; }
+};
+
+int main()
+{
+    A * a = new B();
+    a->display(); // Derived::5
+
+    A* aa = new A();
+    aa->display(); // Base::5
+
+    B* bb = new B();
+    bb->display(); // Derived::9
+}
+```
+
+預設引數在每個呼叫點重新計算，這可能會使生成的程式膨脹。 使用者可能還期望預設值在宣告時固定，而不是在每次呼叫時變化。
+
+存在預設引數時，函式指標會令人困惑，因為函式 signature 通常與呼叫 signature 不匹配。 新增 function overloading 可以避免這些問題。
+
+**Decision:**
+
+預設引數在 virtual function 上被禁止，因為在指定的預設值可能不計算為相同值。
+
+在其他一些情況下，預設引數可以提高其函式宣告的可讀性，足以克服上述缺點，因此允許它們。 當有疑慮時，請使用 overloading。
+
 ### 26. Trailing Return Type Syntax
+
+> **僅在典型的語法難以閱讀時才使用 trailing return type syntax。**
+
+**Definition:**
+
+C++允許兩種不同形式的函式宣告：
+
+```cpp
+int foo(int x);
+auto foo(int 2) -> int; // trailing return type syntax
+```
+
+**Pros:**
+
+Trailing return type 是顯式指定 [lambda表示式](#36-lambda-expressions) 的返回型別的唯一方法。 在某些情況下，編譯器能夠推斷lambda 的返回型別，但並非在所有情況下。 即使編譯器可以自動推斷它，有時明確指定它對讀者來說會更清晰。
+
+有時，在函式的 parameter list 已經宣告候，指定返回型別更容易，也更容易閱讀。 當返回型別取決於模板引數時，情況尤其如此。 例如：
+
+```cpp
+template <typename T, typename U>
+auto add(T t, U u) -> decltype(t + u);
+```
+
+對比
+
+```cpp
+template <typename T, typename U>
+decltype(declval<T&>() + declval<U&>()) add(T t, U u);
+```
+
+**Cons:**
+
+Trailing return type syntax 相對較新，因此一些讀者可能會不熟悉。
+
+現有的程式庫有大量的函式宣告，這些宣告不會被更改為使用新語法，因此現實的選擇是只使用舊語法或使用兩者的混合。 使用單一版本更適合風格的一致性。
+
+**Decision:**
+
+在大多數情況下，繼續使用舊的函式宣告樣式，返回型別在函式名稱之前。 僅在需要時（如lambdas）或透過將型別放在函式引數列表後，允許您以更可讀的方式編寫型別時使用 trailing return type。 後一種情況應該很罕見；這在很大程度上是一個相當複雜的模板程式中的問題，在大多數情況下不鼓勵這樣做。
 
 ---
 
