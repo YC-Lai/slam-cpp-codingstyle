@@ -1373,25 +1373,194 @@ if (raw_size < sizeof(int)) {
 
 ### 43. Type Deduction (including auto)
 
-> 僅當它使程式對不熟悉專案的讀者更清晰，或者它使程式更安全時，才使用 type deduction。 不要僅僅為了避免寫出過長的顯式型別而使用它。
+> 僅當使程式對不熟悉專案的讀者來說更清晰，或者使程式更安全時，才使用 type deduction。 不要僅僅為了避免寫出過長的顯式型別而使用它。
+>
+> 註：建議閱讀 "Effective Modern C++" 中 Item1~4，有對 type detuction 做詳細說明。
 
 **Definition:**
 
+以下幾種情境中，C++ 允許（甚至要求）編譯器推導型別，而不用在程式中完整寫出：
+
+- [Function template argument deduction](https://en.cppreference.com/w/cpp/language/template_argument_deduction)
+  可以在沒有 explicit template arguments 的情況下呼叫函式模板。編譯器從 function arguments 的型別中推導：
+
+  ```cpp
+  template <typename T>
+  void f(T t);
+
+  f(0);  // Invokes f<int>(0)
+  ```
+
+- [auto variable declarations](https://en.cppreference.com/w/cpp/language/auto)
+  變數宣告可以使用 `auto` 關鍵字代替型別。 編譯器從變數的 initializer 中推斷型別，遵循與 function template argument deduction 一樣的推導規則（使用大括號除外，會被推導成 `std::initializer_list<T>`）。
+
+  ```cpp
+  auto a = 42;  // a is an int
+  auto& b = a;  // b is an int&
+  auto c = b;   // c is an int
+  auto d{42};   // d is a std::initializer_list<int>
+  ```
+
+  `auto` 可以用 `const` 進行限定，可以作為 pointer 或 reference type 的一部分使用，但不能用作 template argument。這種語法的一個罕見變體使用 `decltype(auto)` 而不是 `auto`，在這種情況下，推導的型別是將 `decltype` 應用於 initializer 的結果。
+
+- [Function return type deduction](https://en.cppreference.com/w/cpp/language/function#Return_type_deduction)
+  `auto`（和`decltype(auto)`）也可以代替函式的 return type (C++ 14 之後)。編譯器從函式主體的返回語句中推斷出 return type，遵循與變數宣告相同的規則：
+
+  ```cpp
+  auto f() { return 0; }  // The return type of f is int
+  ```
+
+  [Lambda expressions](#46-lambda-expressions) 返回型別可以以同樣的方式推斷，但背後的機制是 template argument deduction。
+
+- [Generic lambdas](https://isocpp.org/wiki/faq/cpp14-language#generic-lambdas)
+  Lambda expressions 可以使用 `auto` 關鍵字來代替其一個或多個引數型別。 這導致 lambda 的 call operator 是一個函式模板，而不是一個普通函式，每個 auto function parameter 都有一個單獨的 template parameter：
+
+  ```cpp
+  // Sort `vec` in decreasing order
+  std::sort(vec.begin(), vec.end(), [](auto lhs, auto rhs) { return lhs > rhs; });
+  ```
+
+- [Lambda init captures](https://isocpp.org/wiki/faq/cpp14-language#lambda-captures)
+  Lambda captures 可以有 explicit initializers，可用於宣告全新的變數，而不僅僅是捕獲現有的變數：
+
+  ```cpp
+  [x = 42, y = "foo"] { ... }  // x is an int, and y is a const char*
+  ```
+
+  此語法不允許指定型別；相反，它是使用 `auto` 推導規則。
+
+- [Class template argument deduction](https://en.cppreference.com/w/cpp/language/class_template_argument_deduction)
+  請見[下一點](#44-class-template-argument-deduction)。
+
+- [Structured bindings](https://en.cppreference.com/w/cpp/language/structured_binding)
+  當使用 `auto` 宣告 tuple、struct 或 array 時，您可以為單個元素指定名稱，而不是整個物件的名稱 （C++ 17 之後）；這些名稱被稱為 “structured bindings”，整個宣告被稱為 “structured binding declaration”。 此語法無法指定 enclosing object 或單一名稱的型別：
+
+  ```cpp
+  auto [iter, success] = my_map.insert({key, value});
+  if (!success) {
+    iter->second = value;
+  }
+  ```
+
+  `auto` 也可以用 `const`、`&` 和 `&&` 來限定，但請注意，這些限定符在技術上適用於匿名 tuple/struct/array，而不是單一 binding。 決定繫結型別的規則相當複雜；結果往往不足為奇，像是即使宣告為引用，繫結型別通常也不會是引用（但無論如何，它們通常都會表現得像引用）。
+
 **Pros:**
+
+- C++ 型別名稱可能很繁瑣，特別是當它們涉及模板或 namespace 時。
+- 當 C++ 型別名稱在單個宣告或小程式區域中重複時，重複可能無法幫助可讀性。
+- 有時讓型別被推斷更安全，因為這樣可以避免意外複製或型別轉換的可能性。
 
 **Cons:**
 
+當型別 explicit 時，C++ 程式通常更清晰，特別是當型別推斷依賴於程式遠端部分的資訊時。 在這樣的表達方式中：
+
+```cpp
+auto foo = x.add_foo();
+auto i = y.Find(key);
+```
+
+如果 y 的型別不太為人所知，或者 y 在許多行之前被宣告，result type 可能無法立即看出。
+
+程式設計師必須瞭解型別推理何時會或不會產生 reference type，或者他們是得到的是一個副本。
+
+如果推導型別被用作介面的一部分，那麼程式設計師可能會更改其型別，同時只打算更改其值，導致客戶端需比預期做更多的更改。
+
 **Decision:**
+
+基本規則是：僅使用 tyep deduction 來使程式更清晰或更安全，不要僅僅為了避免編寫顯式型別的不便而使用它。 在判斷程式是否更清晰時，請記住，您的讀者不一定在您的團隊中，也不一定熟悉您的專案，因此儘管會造成您撰寫上的雜亂，但通常會向他人提供有用的資訊。 例如，您可以假設 `std::make_unique<Foo>()` 的返回型別是顯而易見的，但 `MyWidgetFactory()` 的返回型別可能不是。
+
+這些原則適用於所有形式的 tyep deduction，但細節各不相同，如下方所述：
+
+- **Function template argument deduction:**
+  此類型推導可被允許。型別推理是與函式模板互動的預設方式，因為它允許函式模板像無限集合的普通函式 overload 一樣。 因此，函式模板的設計幾乎總是使 function template argument deduction 清晰安全，或者無法編譯。
+
+- **Local variable type deduction:**
+  對於區域性變數，請謹慎使用 type deduction，透過消除明顯或不相關的型別資訊來使程式更清晰，以便讀者可以專注於程式的有意義部分：
+
+  ```cpp
+  std::unique_ptr<WidgetWithBellsAndWhistles> widget =
+    std::make_unique<WidgetWithBellsAndWhistles>(arg1, arg2);
+  absl::flat_hash_map<std::string,
+                      std::unique_ptr<WidgetWithBellsAndWhistles>>::const_iterator
+      it = my_map_.find(key);
+  std::array<int, 6> numbers = {4, 8, 15, 16, 23, 42};
+  ```
+
+  ```cpp
+  // Better!
+  auto widget = std::make_unique<WidgetWithBellsAndWhistles>(arg1, arg2);
+  auto it = my_map_.find(key);
+  std::array numbers = {4, 8, 15, 16, 23, 42};
+  ```
+
+  型別有時包含有用的資訊，如上面的示例：很明顯，`it` 是一個 iterator，在許多情況中，container 或 key type 都不重要，但 value 可能是有用的。 在這種情況下，通常可以用顯式型別定義區域性變數來傳達清楚的資訊：
+
+  ```cpp
+  if (auto it = my_map_.find(key); it != my_map_.end()) {
+    WidgetWithBellsAndWhistles& widget = *it->second;
+    // Do stuff with `widget`
+  }
+  ```
+
+  一個簡單的原則是：對於涉及到標準庫的 return type，使用 `auto` 可使程式簡潔；而當涉及自定義函式/類，使用顯式型別定義可傳達更清楚的資訊。
+
+  盡量不要使用 `decltype(auto)`，因為它是一個相當晦澀的功能，所傳達的資訊相當模糊。
+
+- **Return type deduction:**
+  僅當函式主體的 `return` 數量很少，才使用 return type deduction（適用於函式和lambdas），否則讀者可能無法一目瞭然地知道 return type 是什麼。 此外，僅當函式或lambda 是 narrow scope 時才使用它，因為此類型的函式不會定義抽象邊界：implementation 是介面。 特別是，header 檔案中的 public 函式禁止使用 return type deduction。
+
+- **Parameter type deduction:**
+  不要使用 lambdas 的 `auto` parameters，因為實際型別由呼叫 lambda 的程式決定，而不是由 lambda 的定義決定。 因此，顯式型別更加的清晰。
+
+- **Lambda init captures:**
+  Init captures 被[更具體的規則](#46-lambda-expressions)，請參閱。
+
+- **Structured bindings:**
+  與其他形式的 type deduction 不同，structured bindings 實際上可以透過為較大物件的元素賦予有意義的名稱來使資訊更清楚。當物件是 pair 或 tuple 時，structured bindings 特別有益（如上面的例子所示），因為它們一開始就沒有有意義的欄位名稱，但請注意，除非像 `insert` 這樣的預先存在的API強迫您使用，否則您通常不應該使用 pair 或 tuple。
+
+  如果被 binding 的物件是一個 struct，不建議使用 structured bindings，因為額外的名稱不會比他本身的命名來的更有意義。
+
 
 ### 44. Class Template Argument Deduction
 
+> 不要使用 class template argument deduction。
+
 **Definition:**
+
+[Class template argument deduction](https://en.cppreference.com/w/cpp/language/class_template_argument_deduction)（通常縮寫為“CTAD”）發生在變數以模板的型別宣告時，並且沒有提供 template argument list（沒有<>括號）：
+
+```cpp
+std::array a = {1, 2, 3};  // `a` is a std::array<int, 3>
+```
+
+編譯器使用模板的 “deduction guides” 從 initializer 中推斷引數，該 guides 可以是 explicit 或 implicit。
+
+Explicit deduction guides 看起來像帶有 trailing return types 的函式宣告，函式名稱是模板的名稱。 例如，上述示例依賴於 `std::array` 的 explicit deduction guides：
+
+```cpp
+namespace std {
+template <class T, class... U>
+array(T, U...) -> std::array<T, 1 + sizeof...(U)>;
+}
+```
+
+Primary template 中的 constructor（而不是 template specialization）也隱含地定義了 deduction guides。
+
+當您宣告依賴 CTAD 的變數時，編譯器使用 constructor overload 選擇 deduction guides，該 guides 的 return types 成為變數的型別。
 
 **Pros:**
 
+CTAD 有時允許您從程式中省略樣板語法。
+
 **Cons:**
 
+從 constructor 生成的 implicit deduction guides 可能具有不良行為，或者完全不正確。 對於 CTAD 在 C++17 中引入之前編寫的 constructor 來說，這尤其成問題，因為這些 constructor 的作者無法知道（更不用說修復）他們的建構函式會給 CTAD 帶來的任何問題。此外，新增 explicit deduction guides 來修復這些問題可能會破壞任何依賴 implicit deduction guides 的現有程式。
+
+CTAD 還存在許多與 `auto` 相同的缺點，因為它們都是從 initializer 中推導出全部或部分變數型別的機制。 CTAD確實為讀者提供了比 `auto` 更多的資訊，但它也沒有給讀者一個明顯的線索，即資訊被省略了。
+
 **Decision:**
+
+不要使用 CTAD，因為客戶端無法清楚得知模板是否提供至少一個 explicit deduction guides 來支援使用 CTAD。
 
 ### 45. Designated Initializers
 
@@ -1730,13 +1899,162 @@ switch (x) {
 
 ### 54. General Naming Rules
 
-### 55. File Names
+使用即使對不同團隊的人來說也很清楚的名字來最佳化可讀性。
+
+使用描述物件目的或意圖的名稱。 不要擔心名稱長短，因為讓新讀者立即理解您的程式要重要得多。 儘量減少使用專案以外的人可能不知道的縮寫（特別是首字母縮寫）。 不要透過刪除單詞中的字母來縮寫。 根據經驗，如果縮寫被列在維基百科中，它可能是可以的。 一般來說，描述性應該與名稱的可見度範圍成正比。 例如，`n` 在只有5行函式中可能是一個很好的變數名稱，但在 class 的範圍內，它可能太模糊了。
+
+```cpp
+// Good!!
+class MyClass {
+ public:
+  int CountFooErrors(const std::vector<Foo>& foos) {
+    int n = 0;  // Clear meaning given limited scope and context
+    for (const auto& foo : foos) {
+      ...
+      ++n;
+    }
+    return n;
+  }
+  void DoSomethingImportant() {
+    std::string fqdn = ...;  // Well-known abbreviation for Fully Qualified Domain Name
+  }
+ private:
+  const int kMaxAllowedConnections = ...;  // Clear meaning within context
+};
+```
+
+```cpp
+// Bad!!
+class MyClass {
+ public:
+  int CountFooErrors(const std::vector<Foo>& foos) {
+    int total_number_of_foo_errors = 0;  // Overly verbose given limited scope and context
+    for (int foo_index = 0; foo_index < foos.size(); ++foo_index) {  // Use idiomatic `i`
+      ...
+      ++total_number_of_foo_errors;
+    }
+    return total_number_of_foo_errors;
+  }
+  void DoSomethingImportant() {
+    int cstmr_id = ...;  // Deletes internal letters
+  }
+ private:
+  const int kNum = ...;  // Unclear meaning within broad scope
+};
+```
+
+請注意，某些眾所周知的縮寫是可以的，例如 `i` 表示迭代變數，`T` 表示模板引數。
+
+就以下命名規則而言，“單詞” 是指您在沒有內部空格的情況下用英語書寫的任何內容。 這包括縮寫，如首字母縮寫。 對於以混合大小寫（有時也稱為“camel case”或“Pascal case”）書寫的名稱，其中每個單詞的第一個字母都大寫，請偏好將縮寫的第一個字母寫成大寫，例如 `StartRpc()` 而不是 `StartRPC()`。
+
+Template parameters 應遵循其類別的命名樣式：type template parameters 應遵循[型別名稱的規則](#56-type-names)，non-type template parameters 應遵循[變數名稱的規則](#57-variable-names)。
+
+### 55. File and Folder Names
+
+檔名與資料夾名應全部小寫，名稱超過兩個以上的單詞可以包括下劃線（`_`）。 
+
+可接受檔名範例：
+
+- `my_useful_class.cc`
+- `my_useful_class_test.cc // _unittest and _regtest are deprecated.`
+- `/src`
+- `/include`
+- `/bin`
+
+C++ 檔案應以 .cc 結尾，header 檔案應以 .h 結尾。 依賴於在特定點以文字方式包含的檔案應以.inc結尾（另請參見關於自包含標題的部分）。
+
+不要使用 `/usr/include` 中已經存在的檔名，例如 `db.h`。
+
+一般來說，讓您的檔名非常具體。 例如，使用 `http_server_logs.h` 而不是 `logs.h`。 一個常見的情況是，有一對名為 `foo_bar.h` 和 `foo_bar.cc` 的檔案，定義一個名為 `FooBar` 的 class。
 
 ### 56. Type Names
 
+Type names 以大寫字母開頭，每個新單詞都有一個大寫字母，沒有下劃線: `MyExcitingClass`，`MyExcitingEnum`。
+
+所有型別的名稱 - class、struct、type aliases、enums和 type template parameters - 具有相同的命名約定。 型別名稱應以大寫字母開頭，每個新單詞都應有一個大寫字母。 沒有下劃線。 例如：
+
+```cpp
+// classes and structs
+class UrlTable { ...
+class UrlTableTester { ...
+struct UrlTableProperties { ...
+
+// typedefs
+typedef hash_map<UrlTableProperties *, std::string> PropertiesMap;
+
+// using aliases
+using PropertiesMap = hash_map<UrlTableProperties *, std::string>;
+
+// enums
+enum class UrlTableError { ...
+```
+
 ### 57. Variable Names
 
+變數（包括 function parameters）和 data members 的名稱應為 snake_case（全部小寫，單詞之間有下劃線）。`class` 的 data members（但不是 `struct`）還必須加上下劃線結尾。 例如：`a_local_variable`、`a_struct_data_member`、`a_class_data_member_`。
+
+若變數表達數學含義（如：矩陣），則另有特殊規範如下方所述。
+
+**Common Variable names**
+
+```cpp
+std::string table_name;  // OK - snake_case.
+```
+
+```cpp
+std::string tableName;   // Bad - mixed case.
+```
+
+**Class Data Members**
+
+Class data members，包括靜態和非靜態的，都像一般變數一樣被命名，但需加上結尾下劃線。
+
+```cpp
+class TableInfo {
+  ...
+ private:
+  std::string table_name_;  // OK - underscore at end.
+  static Pool<TableInfo>* pool_;  // OK.
+};
+```
+
+**Struct Data Members**
+
+`struct` 的 data members，包括靜態和非靜態的，都像普通非成員變數一樣命名。 他們沒有結尾下劃線。
+
+```cpp
+struct UrlTableProperties {
+  std::string name;
+  int num_entries;
+  static Pool<UrlTableProperties>* pool;
+};
+```
+
+**Mathmatical Naming**
+
+$$ 
+we 
+$$
+
 ### 58. Constant Names
+
+被宣告為 `constexpr`或 `const` 的變數，其值在程式期間是固定的，以前綴“k”命名，後面混合大小寫。 在不能將大寫用於分離的極少數情況下，下劃線可以用作分隔符。 例如：
+
+```cpp
+const int kDaysInAWeek = 7;
+const int kAndroid8_0_0 = 24;  // Android 8.0.0
+```
+
+所有具有 static storage duration 的此類變數（即靜態和全域性變數，詳情請參閱 [storage duration](https://en.cppreference.com/w/cpp/language/storage_duration#Storage_duration)）都應以這種方式命名，包括模板中模板的不同例項可能具有不同值的變數。 對於其他儲存類的變數，例如自動變數，此約定是可選的；否則適用通常的變數命名規則。 例如：
+
+```cpp
+void ComputeFoo(std::string_view suffix) {
+  // Either of these is acceptable.
+  const std::string_view kPrefix = "prefix";
+  const std::string_view prefix = "prefix";
+  ...
+}
+```
 
 ### 59. Function Names
 
