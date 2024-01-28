@@ -204,7 +204,7 @@ inline namespace inner {
 
 使用命名空間如下：
 
-- 遵循 [Namespace 命名規則](#50-namespace-names)
+- 遵循 [Namespace 命名規則](#60-namespace-names)
 - 禁止帶有註釋的多行名稱空間，如以下例子所示。
 - Namespace 應包含整個 source file，並且排在來自其他 namespaces 的 includes 和前置宣告之後
   
@@ -280,6 +280,7 @@ inline namespace inner {
     }
     }  // namespace librarian
     ```
+
 - 禁止使用內聯命名空間
 - 使用名稱中帶有 "internal" 的 namespace 來記錄 API 使用者不應提及的API 部分。
 
@@ -677,8 +678,6 @@ Func({42, 3.14});  // Error
 
 **Definition:**
 
-
-
 **Pros:**
 
 **Cons:**
@@ -797,7 +796,7 @@ std::cout << holder.get();  // boom, UB.
 
 相反，找到一種方法來消除生命週期需求（例如，透過 pass by value）。
 
-排序函式 parameters 時，將所有 input parameters 排在 output parameters 之前。 
+排序函式 parameters 時，將所有 input parameters 排在 output parameters 之前。
 
 ### 23. Write Short Functions
 
@@ -836,7 +835,6 @@ class MyClass {
 **Decision:**
 
 當變體之間沒有語義差異時，您可以重載函式，否則考慮定義新的函式。 這些重載可能因型別、qualifiers 或 parameters 數量而異。如果您可以在 header 中用簡單的 comment 記錄 overload set 中的所有變體，這是一個好跡象，表明它是一個設計良好的 overload set。
-
 
 ### 25. Default Arguments
 
@@ -898,7 +896,7 @@ auto foo(int 2) -> int; // trailing return type syntax
 
 **Pros:**
 
-Trailing return type 是顯式指定 [lambda表示式](#36-lambda-expressions) 的返回型別的唯一方法。 在某些情況下，編譯器能夠推斷lambda 的返回型別，但並非在所有情況下。 即使編譯器可以自動推斷它，有時明確指定它對讀者來說會更清晰。
+Trailing return type 是顯式指定 [lambda表示式](#46-lambda-expressions) 的返回型別的唯一方法。 在某些情況下，編譯器能夠推斷lambda 的返回型別，但並非在所有情況下。 即使編譯器可以自動推斷它，有時明確指定它對讀者來說會更清晰。
 
 有時，在函式的 parameter list 已經宣告候，指定返回型別更容易，也更容易閱讀。 當返回型別取決於模板引數時，情況尤其如此。 例如：
 
@@ -979,7 +977,7 @@ void FooConsumer(std::unique_ptr<Foo>& ptr); // pass by reference without moving
 
 **Definition:**
 
-右值引用是一種只能綁定到臨時物件的 reference type。 語法與傳統參考語法相似。 例如，`void f(std::string&& s);` 宣告一個函式，其引數是 `std::string ` 的 右值引用。
+右值引用是一種只能綁定到臨時物件的 reference type。 語法與傳統參考語法相似。 例如，`void f(std::string&& s);` 宣告一個函式，其引數是 `std::string` 的 右值引用。
 
 當 "&&" 應用於函式引數中的不合規模板引數時，適用特殊的模板引數推導規則將被採納。 這種引用被稱為 forwarding reference (aka universal references)。
 
@@ -1106,6 +1104,7 @@ RTTI 有合裡的用途，但容易被濫用，因此您在使用時必須小心
 當程式的邏輯保證 base class 的實例實際上是特定 derived class 的實例時，則可以在物件上自由使用 `dynamic_cast`。 在這種情況下，通常可以使用`static_cast` 作為替代方案。
 
 基於型別的決策樹強烈表明您的程式走錯了軌道:
+
 ```cpp
 if (typeid(*data) == typeid(D1)) {
   ...
@@ -1145,7 +1144,7 @@ C++風格的 casting 語法很冗長。
 
 - 使用 `const_cast` 刪除 `const` 限定符（見 [const](#36-use-of-const))。
 
-- 使用 `reinterpret_cast` 對 pointer 進行與 int 和其他指標型別的不安全轉換，包括 `void*`。 僅在您知道自己在做什麼並理解別名問題時才使用此。 
+- 使用 `reinterpret_cast` 對 pointer 進行與 int 和其他指標型別的不安全轉換，包括 `void*`。 僅在您知道自己在做什麼並理解別名問題時才使用此。
 - 使用 `bit_cast` 解釋使用相同大小的不同型別的 raw bits，例如將`double` 的 bits 解釋為 `int64_t`。(after C++ 17)
 
 有關使用 `dynamic_cast` 的說明，請參閱 [RTTI](#32-run-time-type-information-rtti) 部分。
@@ -1174,7 +1173,6 @@ Stream 透過 `std::cin`、`std::cout`、`std::cerr`和 `std::clog` 為console I
 **Decision:**
 
 使用 `LOAGCATI/E/W/D` 而非標準的 C++ stream API 來防止上述不確定狀態。
-
 
 ### 35. Preincrement and Predecrement
 
@@ -1233,7 +1231,7 @@ Class 的所有 const 操作都應該可以安全地同時呼叫。 如果這不
 ### 37. Use of constexpr, constinit, and consteval
 
 > 使用 `constexpr` 定義真正的常量或確保常量初始化。 使用 `constinit` 來確保非 `const` 變數的 constant initialization。
-> 註：`constinit` 和 `consteval` 需至 C++ 20 後採納 
+> 註：`constinit` 和 `consteval` 需至 C++ 20 後採納
 
 **Definition:**
 
@@ -1254,7 +1252,7 @@ Class 的所有 const 操作都應該可以安全地同時呼叫。 如果這不
 ### 38. Integer Types
 
 > 在內建的 C++ 整數型別中，唯一使用的是 `int`。 如果程式需要不同大小的整數型別，請使用 `<cstdint>` 的精確寬度整數型別，例如 `int16_t`。 如果您的值可能大於或等於 2^31，請使用64位型別，如 `int64_t`。 請記住，即使您的 value 對於 int 來說永遠不會太大，它也可能用於可能需要更大型別的中間計算。 如有疑問，請選擇更大的型別。
-> 
+>
 > 儘量避免 unsigned integers。不要使用 unsigned types 來說一個數字永遠不會是負數。 相反，為此使用 assertions。
 
 **Definition:**
@@ -1301,12 +1299,9 @@ else
 
 結果很驚人，-1 居然比 1 還大。這是由於 C 語言在比較他們大小時會進行 implicit conversion。如果執行的是 `if ((unsigned int)a < b)` 則 -1 被轉換成 4294967295，结果是 a > b；如果執行的是 `if (a < (int)b)` 則結果是 a < b。採取哪種方式依賴於編譯器。
 
-
 也就是說，混合整數型別的符號性會導致問題。 我們能提供的最佳建議是：嘗試使用iterator 和容器，而不是 pointer 和 `size()`，儘量不要混合 signed/unsigned，並儘量避免 unsigned types（表示 bitfields 或 modular arithmetic 除外）。 不要僅僅為了斷言變數是非負的而使用 unsigned types。
 
 ### 39. 64-bit Portability
-
-
 
 ### 40. Preprocessor Macros
 
@@ -1519,7 +1514,6 @@ auto i = y.Find(key);
   與其他形式的 type deduction 不同，structured bindings 實際上可以透過為較大物件的元素賦予有意義的名稱來使資訊更清楚。當物件是 pair 或 tuple 時，structured bindings 特別有益（如上面的例子所示），因為它們一開始就沒有有意義的欄位名稱，但請注意，除非像 `insert` 這樣的預先存在的API強迫您使用，否則您通常不應該使用 pair 或 tuple。
 
   如果被 binding 的物件是一個 struct，不建議使用 structured bindings，因為額外的名稱不會比他本身的命名來的更有意義。
-
 
 ### 44. Class Template Argument Deduction
 
@@ -1760,7 +1754,7 @@ Boost 程式通常品質很高，可以容易嵌入，並填補了 C++ 標準庫
 
 **Definition:**
 
-編譯器支援不屬於標準 C++ 的各種擴充套件。 此類擴充套件包括 GCC 的`__attribute__`，intrinsic functions 如 `__builtin_prefetch` 或SIMD，`#pragma`，inline assembly，`__COUNTER__`，`__PRETTY_FUNCTION__`，複合語句表示式（例如，`foo = ({ int x; Bar（&x）；x})`，可變長度陣列和 `alloca()`，以及“[Elvis運算子](https://en.wikipedia.org/wiki/Elvis_operator)”` a？：b`。
+編譯器支援不屬於標準 C++ 的各種擴充套件。 此類擴充套件包括 GCC 的`__attribute__`，intrinsic functions 如 `__builtin_prefetch` 或SIMD，`#pragma`，inline assembly，`__COUNTER__`，`__PRETTY_FUNCTION__`，複合語句表示式（例如，`foo = ({ int x; Bar（&x）；x})`，可變長度陣列和 `alloca()`，以及“[Elvis運算子](https://en.wikipedia.org/wiki/Elvis_operator)”`a？：b`。
 
 **Pros:**
 
@@ -1951,7 +1945,7 @@ Template parameters 應遵循其類別的命名樣式：type template parameters
 
 ### 55. File and Folder Names
 
-檔名與資料夾名應全部小寫，名稱超過兩個以上的單詞可以包括下劃線（`_`）。 
+檔名與資料夾名應全部小寫，名稱超過兩個以上的單詞可以包括下劃線（`_`）。
 
 可接受檔名範例：
 
@@ -1995,7 +1989,7 @@ enum class UrlTableError { ...
 
 若變數表達數學含義（如：矩陣），則另有特殊規範如下方所述。
 
-**Common Variable names**
+#### Common Variable names
 
 ```cpp
 std::string table_name;  // OK - snake_case.
@@ -2005,7 +1999,7 @@ std::string table_name;  // OK - snake_case.
 std::string tableName;   // Bad - mixed case.
 ```
 
-**Class Data Members**
+#### Class Data Members
 
 Class data members，包括靜態和非靜態的，都像一般變數一樣被命名，但需加上結尾下劃線。
 
@@ -2018,7 +2012,7 @@ class TableInfo {
 };
 ```
 
-**Struct Data Members**
+#### Struct Data Members
 
 `struct` 的 data members，包括靜態和非靜態的，都像普通非成員變數一樣命名。 他們沒有結尾下劃線。
 
@@ -2030,22 +2024,22 @@ struct UrlTableProperties {
 };
 ```
 
-**Mathmatical Naming**
+#### Mathmatical Naming
 
-$$ 
-we 
+$$
+we
 $$
 
 ### 58. Constant Names
 
-被宣告為 `constexpr`或 `const` 的變數，其值在程式期間是固定的，以前綴“k”命名，後面混合大小寫。 在不能將大寫用於分離的極少數情況下，下劃線可以用作分隔符。 例如：
+被宣告為 `constexpr`或 `const` 的變數，其值在運行期間是固定的，以前綴“k”命名，後面混合大小寫。 在不能將大寫用於分離的極少數情況下，下劃線可以用作分隔符。 例如：
 
 ```cpp
 const int kDaysInAWeek = 7;
 const int kAndroid8_0_0 = 24;  // Android 8.0.0
 ```
 
-所有具有 static storage duration 的此類變數（即靜態和全域性變數，詳情請參閱 [storage duration](https://en.cppreference.com/w/cpp/language/storage_duration#Storage_duration)）都應以這種方式命名，包括模板中模板的不同例項可能具有不同值的變數。 對於其他儲存類的變數，例如自動變數，此約定是可選的；否則適用通常的變數命名規則。 例如：
+所有具有 static storage duration 的變數（即靜態和全域性變數，詳情請參閱 [storage duration](https://en.cppreference.com/w/cpp/language/storage_duration#Storage_duration)）都應以這種方式命名，這也包括模板的不同 instantiations 可能具有不同值的變數。 對於其他儲存類的變數，例如 local variables，此約定是可選的；否則適用一般的變數命名規則。 例如：
 
 ```cpp
 void ComputeFoo(std::string_view suffix) {
@@ -2056,33 +2050,268 @@ void ComputeFoo(std::string_view suffix) {
 }
 ```
 
+```cpp
+void ComputeFoo(std::string_view suffix) {
+  // Bad - different invocations of ComputeFoo give kCombined different values.
+  const std::string_view kCombined{kPrefix, suffix};
+  ...
+}
+```
+
 ### 59. Function Names
+
+函式命名應混合大小寫；getter 和 setter 類型則可以像變數一樣命名。
+
+通常，函式應該以大寫字母開頭，每個新單詞都有一個大寫字母。
+
+```cpp
+AddTableEntry()
+DeleteUrl()
+OpenFileOrDie()
+```
+
+Get 和 set functions 可以像變數一樣命名。 這些通常對應於實際成員變數，但這不是必需的。 例如，`int count()` 和 `void set_count(int count)`。
 
 ### 60. Namespace Names
 
+Namespace 名稱都是小寫的，單詞用下劃線分隔。 Top-level namespace 名稱基於專案名稱。 避免 nested namespaces 和眾所周知的 top-level namespaces 之間的衝突。
+
+Top-level namespace 的名稱應該是專案名稱。 該 namescape 中的程式通常應位於其子目錄中。
+
+請記住，[禁止縮寫名稱的規則](#54-general-naming-rules) 一樣適用於 namespace。 Namespace 內的程式很少需要提及 namespace 名稱，因此通常不需要縮寫。
+
+避免 nested namespaces 與 top-level namespaces 同名。 由於名稱查詢規則，名稱空間之間的衝突可能會導致 build breaks。 特別是，不要建立任何 nested 的std namespace。 請偏好使用 unique project identifiers （`websearch::index`，`websearch::index_util`），而不是像 `websearch::util` 這樣的容易發生碰撞的名稱。 還要避免過於深的 nested namespaces（[TotW #130](https://abseil.io/tips/130)）。
+
+對於 internal namespaces，請小心將其他程式新增到相同的 internal namespaces 中可能導致衝突。 在這種情況下，使用檔名製作唯一的內部名稱是有幫助的（`websearch::index::frobber_internal` 在 `frobber.h` 中使用）。
+
 ### 61. Enumerator Names
+
+Enumerators（適用於 scoped 和 unscoped enums）應該像 [constants](#58-constant-names) 一樣命名，而不是像 [macros](#62-macro-names) 那樣命名。 也就是說，使用 `kEnumName` 而不是 `ENUM_NAME`。
+
+```cpp
+enum class UrlTableError {
+  kOk = 0,
+  kOutOfMemory,
+  kMalformedInput,
+};
+```
+
+```cpp
+// Bad!
+enum class AlternateUrlTableError {
+  OK = 0,
+  OUT_OF_MEMORY = 1,
+  MALFORMED_INPUT = 2,
+};
+```
 
 ### 62. Macro Names
 
+通常不會去定義 [macro](#40-preprocessor-macros)，如果你這樣做了，請這樣命名：`MY_MACRO_THAT_SCARES_SMALL_CHILDREN_AND_ADULTS_ALIKE`。
+
+請參閱 [macros](#40-preprocessor-macros) 的描述；一般來說，不應使用 macros。 然而，如果絕對需要它們，那麼它們應該用所有大寫字母和下劃線來命名，並帶有專案的前綴。
+
+```cpp
+#define MYPROJECT_ROUND(x) ...
+```
+
 ### 63. Exceptions to Naming Rules
+
+如果您要命名的東西類似於現有 C 或 C++ 所定義的東西，那麼您可以遵循現有的命名約定方案。
+
+`bigopen()`:
+  function name, follows form of open()
+`uint`:
+typedef
+`bigpos`:
+struct or class, follows form of pos
+`sparse_hash_map`:
+STL-like entity; follows STL naming conventions
+`LONGLONG_MAX`:
+a constant, as in INT_MAX
 
 ---
 
 ## Comments
 
+Comments 對於保持我們的程式可讀性至關重要。 以下規則描述了您應該 comment 的內容和位置。 但請記住：**雖然 comments 非常重要，但最好的程式是 self-documenting。 為型別和變數提供合理的名稱比使用晦澀的名字要好得多，無法傳達足夠資訊才透過 comments 來解釋。**
+
 ### 64. Comment Style
+
+可任意使用 `//` 或 `/* */` 語法，但請保持前後文風格一致。
 
 ### 65. File Comments
 
+在每個檔案開頭加上 license。
+
+如果 source file（如.h檔案）宣告了多個開放給使用者的 public API (代表客戶是不知道實作的)，請附上描述這些抽象集合的評論。 包括足夠的細節，以便未來的作者知道此檔案的意圖。
+
+例如，如果您為 `frobber.h` 編寫檔案註釋，則無需在 `frobber.cc` 或`frobber_test.cc` 中包含檔案註釋。 另一方面，如果`register_objects.cc` 中沒有相關的 header file，則必須在 `register_objects.cc`中包含檔案註釋。
+
 ### 66. Struct and Class Comments
+
+每個複雜的 class 或 struct 宣告都應該有一個隨附的註釋，描述它的用途以及應該如何使用它。
+
+```cpp
+// Iterates over the contents of a GargantuanTable.
+// Example:
+//    std::unique_ptr<GargantuanTableIterator> iter = table->NewIterator();
+//    for (iter->Seek("foo"); !iter->done(); iter->Next()) {
+//      process(iter->key(), iter->value());
+//    }
+class GargantuanTableIterator {
+  ...
+};
+```
 
 ### 67. Function Comments
 
+宣告註釋描述函式的使用（當它晦澀時）；函式定義的註釋描述操作。
+
+#### Function Declarations
+
+幾乎每個函式宣告都應該在它之前有註釋，描述函式的作用以及如何使用它。 只有當函式簡單而明顯時，才能省略這些註釋（例如，setters）。 在.cc檔案中宣告的 private methods 和函式不能豁免。 函式註釋盡量以動詞作為開頭；例如，"Opens the file"。 一般來說，這些註釋並不描述該函式如何執行其任務。 相反，這應該留給 function definition 中的註釋。
+
+在 function declaration 的 comments 中通常包含：
+
+- Inputs 和 output 是什麼。
+- 對於 class member functions：物件是否在方法 duration of the method call 之後記住 reference 或 pointer parameters。 這常於 constructor 的pointer/reference parameters。
+- 對於每個 pointer parameters，是否允許為 null，如果是 null，會發生什麼。
+- 對於每個 input/output argument，該引數處於的任何狀態會發生什麼。 （例如，狀態是附加的還是覆蓋的？）
+- 如果特定的使用函式會造成任何效能影響。
+
+這裡有一個例子：
+
+```cpp
+// Returns an iterator for this table, positioned at the first entry
+// lexically greater than or equal to `start_word`. If there is no
+// such entry, returns a null pointer. The client must not use the
+// iterator after the underlying GargantuanTable has been destroyed.
+//
+// This method is equivalent to:
+//    std::unique_ptr<Iterator> iter = table->NewIterator();
+//    iter->Seek(start_word);
+//    return iter;
+std::unique_ptr<Iterator> GetIterator(absl::string_view start_word) const;
+```
+
+然而，不要註解完全明顯的事實。
+
+當記錄 function overrides 時，請關注重寫本身的細節，而不是重複重寫函式的註釋。 在其中許多情況下，覆蓋不需要額外的說明，因此不需要 comment。
+
+在 comment constructor 和 destructor 時，請記住，閱讀程式的人知道 constructor 和 destructor 的用途，所以只說 “destroys this object”之類的註釋是沒有用的。 記錄 constructor 如何處理他們的 parameters（例如，如果他們擁有 pointers 的所有權），以及 destructor 做了什麼清理。 如果這微不足道，只需跳過評論。 destructor 沒有註釋是很常見的。
+
+#### Function Definitions
+
+如果函式複雜，function definition 應該有一個解釋性的評論。 例如，在定義註釋中，您可以描述您使用的任何技巧，概述您所經歷的步驟，或解釋您為什麼選擇以自己的方式實現該函式。 例如，您可能會提到為什麼它必須為功能的前半部分使用 `lock`，但為什麼後半部分不需要它。
+
+請注意，您不應該給出在.h檔案或任何地方重複的註釋。 簡要總結一下該功能的作用是可以的，但評論的重點應該是它是如何做到的。
+
 ### 68. Variable Comments
+
+一般來說，變數的實際名稱應該足以描述性，以很好地瞭解變數的用途。
+
+#### Class Data Members
+
+每個 class data member（也稱為 instance variable 或 member variable）的目的必須明確。 如果有任何不變數（特殊值、member 之間的關係、lifetime）沒有明確由型別和名稱表示，則必須對其進行評論。 但是，如果型別和名稱足夠（`int num_events_;`），則無需註釋。
+
+特別說明，需新增註釋來描述特殊值的存在和含義，如 `nullptr` 或 `-1`。 例如：
+
+```cpp
+private:
+ // Used to bounds-check table accesses. -1 means
+ // that we don't yet know how many entries the table has.
+ int num_total_entries_;
+```
+
+#### Global Variables
+
+所有全域性變數都應該有一個註釋，描述它們是什麼，它們用於什麼，以及（如果不清楚）為什麼它們需要全域性。 例如：
+
+```cpp
+// The total number of test cases that we run through in this regression test.
+const int kNumTestCases = 6;
+```
 
 ### 69. Implementation Comments
 
+在您的 implementation 中，您應該在程式的棘手、不明顯、有趣或重要部分註釋。
+
+#### Explanatory Comments
+
+棘手或複雜的 code blocks 應該有註釋 ，並且寫在前面。
+
+#### Function Argument Comments
+
+當函式引數的含義不明顯時，請考慮以下補救措施之一：
+
+- 如果引數是一個字面常量，並且在多個函式呼叫中使用相同的常量，而預設它們是相同的，您應該使用命名常量來明確該約束，並保證它成立。
+
+- 考慮更改函式定義，將 `bool` parameter 替換為 enums。 這將使參數 self-describing。
+
+- 對於具有多個配置選項的函式，請考慮定義單個 class 或 struct 來儲存所有選項，並傳遞其中一個 instance。 這種方法有幾個優點。 選項在變數命名就可以反應它們的含義。 它還減少了函式 argument count，這使得函式呼叫更容易讀寫。 作為一項額外的好處，當您新增其他選項時，您不必更改程式碼。
+
+- 用命名新變數替換大型或複雜的 nested expressions。
+
+- 作為最後手段，在 call 的地方使用註解來說明含義。
+
+考慮以下示例：
+
+```cpp
+// What are these arguments?
+const DecimalNumber product = CalculateProduct(values, 7, false, nullptr);
+```
+
+```cpp
+ProductOptions options;
+options.set_precision_decimals(7);
+options.set_use_cache(ProductOptions::kDontUseCache);
+const DecimalNumber product =
+    CalculateProduct(values, options, /*completion_callback=*/nullptr);
+```
+
+#### Don'ts
+
+不要陳述顯而易見的邏輯。 特別是，不要從字面上描述程式的作用，除非該行為對理解 C++ 的讀者來說並不明顯。 相反，提供更高級別的註釋，描述為什麼程式會做它所做的事情，或者讓程式 self describing。
+
+比較這個：
+
+```cpp
+// Find the element in the vector.  <-- Bad: obvious!
+if (std::find(v.begin(), v.end(), element) != v.end()) {
+  Process(element);
+}
+```
+
+```cpp
+// Process "element" unless it was already processed.
+if (std::find(v.begin(), v.end(), element) != v.end()) {
+  Process(element);
+}
+```
+
+Self-describing 程式不需要註解。 下面示例中的註解是顯而易見的：
+
+```cpp
+if (!IsAlreadyProcessed(element)) {
+  Process(element);
+}
+```
+
 ### 70. Punctuation, Spelling, and Grammar
+
+注意標點符號、拼寫和語法。
+
+評論應該像敘事文字一樣可讀，並有適當的大寫和標點符號。 在許多情況下，完整的句子比句子片段更可讀。 較短的評論，例如一行程式末尾的評論，有時可能不那麼正式，但您應該與您的風格保持一致。
 
 ### 71. TODO Comments
 
+對於臨時、短期解決方案或足夠但不完美的程式，請使用 `TODO` 註釋。
+
+`TODO` 這個標籤應全部大寫，並用小括號包含自己的名字，如：
+
+```cpp
+// TODO(John): Use a "\*" here for concatenation operator.
+```
+
+如果您的 `TODO` 是“在未來做某事”的形式，請確保您包含一個非常特定的日期（“在2005年11月之前修復”）或一個非常特定的事件（“當所有客戶端都可以處理 XML responses 時，請刪除此程式”）。
