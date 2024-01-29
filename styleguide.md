@@ -2024,11 +2024,88 @@ struct UrlTableProperties {
 };
 ```
 
-#### Mathmatical Naming
+#### Mathmatical Notation
+
+SLAM 的應用中存在大量的線性代數表達。為了貼近我們所使用的數學符號以增進閱讀效率，關於此類變數命名需予以特殊規範。
+
+##### Matrix
+
+使用大寫字母，並且遵循 row-first 規則。由於對於同一個矩陣，現行存在不同 liberary 的表達方式，因此我們以不同符號作為區分：
+
+- `T`: Transform Matrix，如： `Eigen::Matrix4f`/`Eigen::Matrix4d`。
+- `cvT`: Open CV based Transform Matrix，如： `cv::Mat(4, 4, CV_32FC1, data)`/`cv::Mat(4, 4, CV_64FC1, data)`。
+- `R`: Roataion Matrix，如： `Eigen::Matrix3f`/`Eigen::Matrix3d`。
+- `cvR`: Open CV based Roataion Matrix，如： `cv::Mat(3, 3, CV_32FC1, data)`/`cv::Mat(3, 3, CV_64FC1, data)`。
+- `SE3`/`SE2`: 特殊歐氏群 $\rm{SE(3)}$，如：`Sophus::SE3f`/`Sophus::SE3d`。`SE2` 以此類推。
+- `SO3`/`SO2`: 特殊正交群 $\rm{SO(3)}$，如：`Sophus::SO3f`/`Sophus::SO3d`。`SO2` 以此類推。
+
+##### Vector
+
+- `t`: Translation vector，如：`Eigen::Vector3f`/`Eigen::Vector3d`。
+- `q`: Quaternion，如：`Eigen::Quaterniond`。由於現行不同團隊間存在以 array 型別作為溝通媒介，我們遵循既有慣例（$\rm{q_x, q_y, q_z, q_w}$），如：`std::array<float, 4>`/`float q[4]`。
+- `se3`, `se2`: 李代數 $\frak{se3}$，如：`Eigen::Vector6f`/`Eigen::Vector6d`。
+- `so3`, `so2`: 李代數 $\frak{so3}$，如：`Eigen::Vector3f`/`Eigen::Vector3d`。
+
+##### Multi-Camera Extrinsic
+
+對於多相機系統，我們對於相機之間的坐標系轉換賦予特殊的保留字：
+
+- `c1`, `c2`, ..., `cn`: 相機坐標系（cam 0 ~ cam n）。
+- `i`: IMU 坐標系。
+
+##### Global Coordinate System
+
+而對於坐標系描述我們使用小寫，我們給予以下規範：
+
+- `w`: 首幀 cam0 的坐標系（aka 世界坐標系），設為 cv world coordinate。
+- `g`: 首幀 cam0 擺正後的坐標（aka 重力坐標系），設為  cv gravity coordinate。
+- `{k}{n}`: 指定 k 幀第 n 個 cam 的坐標系。k可自行定義代號，若代號過於晦澀請加上說明。
+- `iw`: 首幀 IMU 的坐標系，設為 imu world coordinate。
+- `ig`: 首幀 IMU 對齊重力方向後的坐標系，設為 imu gravity coordinate。
+- `i{n}`: 指定 n 幀 IMU 的坐標系。n 可自行定義代號，若代號過於晦澀請加上註解說明。
+- 自定義：請優先遵循上述規定。若無法滿足需求，我們允許自定義坐標系名稱，且必須在 declaretion 處寫下註解說明。
+
+##### Linear Algebra
+
+有了上述的保留字，我們便可以定義線性代數運算的符號表達，通用規則為將不同坐標系以下劃線隔開，如：
+
+```cpp
+{Vector}_{coord2} = {Matrix}_{coord2}_{coord1} * {Vector}_{coord1};
+
+{Matrix}_{coord3}_{coord1} = {Matrix}_{coord3}_{coord2} * {Matrix}_{coord2}_{coord1}
+```
+
+等效於以下數學表達：
 
 $$
-we
+\rm{t_{coord. 2} = T^{coord. 1}_{coord. 2} * t_{coord. 1}}
 $$
+
+$$
+\rm{T^{coord. 1}_{coord. 3} = T^{coord. 2}_{coord. 3} * T^{coord. 1}_{coord. 2}}
+$$
+
+對於相機 extrinsic 轉換，命名規則如下：
+
+- $\rm{T^{c0}_{c1}}$：`T_c1_c0`，即 cam0 轉至 cam1 坐標系。
+- $\rm{T^{c0}_{i}}$：`T_i_c0`，即 cam0 轉至 IMU 坐標系。
+
+不同相機編號以此類推。
+
+對於全域坐標系轉換，請參考以下範例來看如何命名：
+
+- $\rm{t_{g} = T^{w}_{g} * t_{w}}$：`t_g = T_g_w * t_w`
+- $\rm{T^{w}_{cur2} = T^{cur0}_{cur2} * T^{w}_{cur0}}$：`T_cur2_cw = T_cur2_cur0 * T_cur0_w`，`cur0` 代表當前幀 cam0 坐標系。
+- $\rm{T^{anchor}_{refkf0} = T^{w}_{refkf0} * T^{anchor}_{w}}$：`T_refkf0_anchor = T_refkf0_w * T_w_anchor`，其中 `anchor` 為自定義坐標系，`refkf0`  代表 `refkf` 幀的 cam0 坐標系。
+
+##### Pose Array
+
+由於現行不同團隊間存在以 array 型別作為溝通媒介，因此我們將 `Pose`作為保留字，並遵循此順序規範（$\rm{t_x, t_y, t_z, q_x, q_y, q_z, q_w}$），如：`std::array<float, 7>`/`float q[7]`。
+
+對於基於不同坐標系下的 pose，又分為：
+
+- `Pose_g`: 重力坐標系下的 pose，即 $\rm{T^{current\, frame}_{g}}$
+- `Pose_w`: 世界坐標系下的 pose，即 $\rm{T^{current\, frame}_{w}}$
 
 ### 58. Constant Names
 
